@@ -1,0 +1,55 @@
+{
+	"name": "geolookup",
+	"version": "0.1.0",
+	"description": "A Harper plugin for fast, tier-based reverse geocoding of US coordinates using H3 spatial indexing.",
+	"license": "Apache-2.0",
+	"type": "module",
+	"keywords": [
+		"geocoding",
+		"h3",
+		"harper",
+		"reverse-geocoding",
+		"geolookup"
+	],
+	"author": {
+		"name": "Kyle Bernhardy"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kylebernhardy/geolookup.git"
+	},
+	"engines": {
+		"node": ">=24.0.0",
+		"harperdb": ">=4.7.0"
+	},
+	"files": [
+		"src/",
+		"resources/",
+		"schemas/",
+		"data/",
+		"config.yaml"
+	],
+	"scripts": {
+		"agent:run": "npx -y @harperfast/agent@latest",
+		"agent:skills:update": "npx -y skills@latest add harperfast/skills --all --yes",
+		"start": "harperdb run .",
+		"dev": "harperdb dev .",
+		"lint": "eslint .",
+		"format": "prettier --write .",
+		"test": "node --test test/*.test.js",
+		"test:watch": "node --watch --test test/*.test.js",
+		"deploy": "dotenv -- npm run deploy:component",
+		"deploy:component": "harperdb deploy_component . restart=rolling replicated=true"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"dotenv-cli": "^11.0.0",
+		"eslint": "^10.0.2",
+		"globals": "^17.4.0",
+		"harperdb": "^4.7.20",
+		"prettier": "^3.8.1"
+	},
+	"dependencies": {
+		"h3-js": "^4.4.0"
+	}
+}

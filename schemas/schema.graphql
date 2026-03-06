@@ -1,0 +1,71 @@
+# Location stores geographic entities across three tiers of US administrative hierarchy:
+#   Tier 1 (place): Cities, towns, CDPs — partial coverage (urban areas only)
+#   Tier 2 (county_subdivision): Townships, MCDs, CCDs — full national coverage
+#   Tier 3 (county): Counties, parishes, boroughs — full national coverage
+#
+# Each location links back to its H3 cells via relationship directives. A tier 1
+# location connects to cells through tier_1, tier 2 through tier_2, etc. Not every
+# location has cells at every tier — a county won't have tier_1 cells, for example.
+type Location @table(database: "geolookup") {
+  id: ID @primaryKey
+  tier: Int
+  tier_label: String
+  name: String @indexed
+  name_full: String
+  feature_type: String
+  state_name: String
+  state_abbrev: String
+  lat: Float
+  lon: Float
+  h3_index: String @indexed
+  country_code: String
+  lsad: String
+  county_name: String
+  county_fips: String
+  place_cells: [Cell] @relationship(to : tier_1)
+  county_subdivision_cells: [Cell] @relationship(to : tier_2)
+  county_cells: [Cell] @relationship(to : tier_3)
+}
+
+# DataLoadJob tracks the progress of asynchronous bulk data loading jobs.
+# When a user hits the DataLoad endpoint with a state name, a job record is created
+# here and returned immediately. The job progresses through statuses:
+#   pending → extracting → loading_locations → loading_cells → completed (or error)
+# Exported so it can be queried directly via REST to check job progress.
+type DataLoadJob @table(database: "geolookup") @export {
+  id: ID @primaryKey
+  state: String @indexed
+  status: String @indexed
+  error_message: String
+  location_count: Int
+  cell_count: Int
+  started_at: String
+  completed_at: String
+  duration_ms: Int
+}
+
+# Cell is the spatial index that powers reverse geocoding lookups. Each record
+# represents a single H3 hexagonal cell and links to the Location(s) it belongs
+# to at each tier.
+#
+# Cells are stored in H3's "compact" representation — groups of 7 sibling cells
+# sharing a parent are replaced by that parent cell, recursively. This means cells
+# exist at mixed resolutions (2 through 9), dramatically reducing table size while
+# covering the same geographic area.
+#
+# A single cell can belong to locations at multiple tiers simultaneously. For example,
+# one cell might be in San Francisco (tier_1), a county subdivision (tier_2), and
+# San Francisco County (tier_3).
+#
+# The tier fields are indexed to support lookups in both directions:
+#   - Cell → Location: the @relationship directives join to Location records
+#   - Location → Cells: the Location relationship directives join back via tier fields
+type Cell @table(database: "geolookup") {
+  h3_index: ID @primaryKey
+  tier_1: String @indexed
+  tier_2: String @indexed
+  tier_3: String @indexed
+  county: Location @relationship(from: tier_3)
+  county_subdivision: Location @relationship(from: tier_2)
+  place: Location @relationship(from: tier_1)
+}
