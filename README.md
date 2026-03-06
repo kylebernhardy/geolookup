@@ -475,8 +475,13 @@ npm run deploy
 
 A GitHub Actions workflow (`.github/workflow/deploy.yaml`) is also included for CI/CD deployment via `workflow_dispatch`.
 
+## Example Application
+
+For a working implementation of this plugin, see [geolookup-example](https://github.com/kylebernhardy/geolookup-example). It's a minimal Harper application that wires up the geocoding and data loading endpoints via `config.yaml`, and includes an interactive CLI for bulk loading state data with real-time progress tracking.
+
 ## Links
 
+- [geolookup-example](https://github.com/kylebernhardy/geolookup-example) — Reference implementation with interactive data loading CLI
 - [Harper Documentation](https://docs.harperdb.io/docs)
 - [Harper Fabric](https://fabric.harper.fast/)
 - [Harper Components Reference](https://docs.harperdb.io/docs/reference/components)
