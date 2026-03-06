@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const { Location, Cell, DataLoadJob } = databases.geolookup;
-const DATA_DIR = new URL('../data/', import.meta.url).pathname;
+const DATA_DIR = new URL('../../data/', import.meta.url).pathname;
 
 /**
  * Reads all JSON files from a directory and loads each file's records into the
