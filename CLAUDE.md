@@ -23,14 +23,13 @@ Geolookup is a Harper application that performs reverse geocoding. Given lat/lon
 
 - `src/index.ts` -Plugin entry point. Exports `Geolookup` and `DataLoad` resources. Implements `handleApplication()` which conditionally registers services based on scope options (`exposeGeoService`/`geoServiceName`, `exposeDataLoadService`/`dataLoadServiceName`).
 - `src/types.ts` -Defines the `GeolookupConfig` interface for plugin configuration options.
-- `resources/Geolookup.ts` -Core logic. Extends Harper `Resource`. The `get()` handler accepts `lat`/`lon` query params, converts to H3 index at resolution 9, then searches `Cell` table with progressively coarser resolutions (9→2) to find the best location match. Priority: place > county_subdivision > county.
-- `resources/DataLoad.ts` -Bulk data loading endpoint. Accepts a `state` query param, validates the tar file exists, creates a `DataLoadJob` record, and returns the job ID immediately. Extraction and loading run asynchronously, updating job progress through status transitions (`pending` → `extracting` → `loading_locations` → `loading_cells` → `completed`/`error`).
+- `src/resources/Geolookup.ts` -Core logic. Extends Harper `Resource`. The `get()` handler accepts `lat`/`lon` query params, converts to H3 index at resolution 9, then searches `Cell` table with progressively coarser resolutions (9→2) to find the best location match. Priority: place > county_subdivision > county.
+- `src/resources/DataLoad.ts` -Bulk data loading endpoint. Accepts a `state` query param, validates the tar file exists, creates a `DataLoadJob` record, and returns the job ID immediately. Extraction and loading run asynchronously, updating job progress through status transitions (`pending` → `extracting` → `loading_locations` → `loading_cells` → `completed`/`error`).
 - `schemas/schema.graphql` -Defines three tables in the `geolookup` database:
   - `Location` -geographic entities (places, counties, subdivisions) with tier-based hierarchy
   - `Cell` -H3 cells linking to locations at 3 tiers via `@relationship` directives
   - `DataLoadJob` -tracks async data load job progress, exported for direct querying
 - `data/` -Pre-packaged `.tar.gz` files per state/territory containing Location and Cell JSON data
-- `web/` -Static frontend served by Harper's static component
 - `config.yaml` -Harper app config; `graphqlSchema` loads schemas, `pluginModule` points to `src/index.ts`
 
 ## Workflow

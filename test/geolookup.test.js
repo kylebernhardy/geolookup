@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseTiers } from '../resources/Geolookup.ts';
+import { parseTiers } from '../src/resources/Geolookup.ts';
 
 test('parseTiers returns all tiers when no param provided', () => {
 	const result = parseTiers(undefined);

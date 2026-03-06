@@ -11,7 +11,7 @@
 # This provides the HTTP REST interface for all exported resources
 #rest: true
 
-pluginModule: 'src/index.ts'
+pluginModule: 'dist/index.js'
 
 # These reads GraphQL schemas to define the schema of database/tables/attributes.
 graphqlSchema:
@@ -19,7 +19,7 @@ graphqlSchema:
 
 # Loads JavaScript modules such that their exports are exported as resources
 #jsResource:
-#  files: 'resources/*.ts'
+#  files: 'src/resources/*.ts'
 
 # Load seed data from JSON files into tables
 #dataLoader:

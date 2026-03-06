@@ -1,5 +1,5 @@
-import {Geolookup} from '../resources/Geolookup.ts';
-import {DataLoad} from '../resources/DataLoad.ts';
+import {Geolookup} from './resources/Geolookup.ts';
+import {DataLoad} from './resources/DataLoad.ts';
 import {Scope} from 'harperdb';
 import type {GeolookupConfig} from "./types.ts";
 export {Geolookup, DataLoad};
