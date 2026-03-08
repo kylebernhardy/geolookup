@@ -172,11 +172,17 @@ flowchart LR
 
 ### Installing as a Plugin
 
-In the consuming application's `config.yaml`, reference the Geolookup component and provide configuration options:
+Geolookup is published on [npm](https://www.npmjs.com/package/geolookup-plugin) as `geolookup-plugin`. To use it in your Harper application, first install the package:
+
+```sh
+npm install geolookup-plugin
+```
+
+Then, in the consuming application's `config.yaml`, reference the Geolookup component and provide configuration options:
 
 ```yaml
-'geolookup':
-  package: 'geolookup'
+'geolookup-plugin':
+  package: 'geolookup-plugin'
   exposeGeoService: true
   geoServiceName: 'geo'
   exposeDataLoadService: true
