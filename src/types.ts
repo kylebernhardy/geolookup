@@ -1,5 +1,3 @@
-
-
 /** Configuration options for the Geolookup plugin, provided via `config.yaml` in the consuming application. */
 export interface GeolookupConfig {
     /** When truthy, registers the Geolookup resource as a REST endpoint at the path specified by `geoServiceName`. Defaults to `false`. */
@@ -55,3 +53,5 @@ export interface DataLoadJob {
 	completed_at: string;
 	duration_ms: number;
 }
+
+export type {RequestTarget} from 'harperdb';

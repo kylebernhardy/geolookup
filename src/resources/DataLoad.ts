@@ -1,4 +1,4 @@
-import { databases } from 'harperdb';
+import {databases, RequestTarget} from 'harperdb';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -88,7 +88,7 @@ async function processDataLoad(jobId: string, state: string, tarPath: string) {
 			completed_at: new Date().toISOString(),
 			duration_ms: durationMs,
 		});
-	} catch (err) {
+	} catch (err: any) {
 		const durationMs = Date.now() - startTime;
 		await DataLoadJob.patch(jobId, {
 			status: 'error',
@@ -119,7 +119,7 @@ export class DataLoad extends Resource {
 	 * @param target - Harper request target containing query parameters
 	 * @returns Object with jobId on success, or an error object on validation failure
 	 */
-	async get(target) {
+	async get(target: RequestTarget) {
 		const state = target.get('state');
 		if (!state) {
 			return { error: 'state query parameter is required' };

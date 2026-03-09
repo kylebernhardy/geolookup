@@ -1,6 +1,6 @@
 import { latLngToCell, cellToParent } from 'h3-js';
-import { databases } from 'harperdb';
-import type { Location, Cell as CellType } from '../types.ts';
+import { databases, RequestTarget } from 'harperdb';
+import type { Location } from '../types.js';
 const { Location, Cell } = databases.geolookup;
 
 // Tiers map to US administrative hierarchy levels:
@@ -17,7 +17,7 @@ const LOCATION_SELECT = ['id', 'tier', 'name', 'name_full', 'state_name', 'state
  * @param tiersParam - Raw tiers query parameter value
  * @returns A Set of valid tier strings, or an error object if any requested tier is invalid
  */
-export function parseTiers(tiersParam: string | undefined): Set<string> | { error: string } {
+export function parseTiers(tiersParam: string | null): Set<string> | { error: string } {
 	if (!tiersParam || tiersParam === 'all') {
 		return new Set(VALID_TIERS);
 	}
@@ -41,9 +41,9 @@ export class Geolookup extends Resource {
 	 * @param target - Harper request target containing query parameters
 	 * @returns Lookup results keyed by tier name, or an error object
 	 */
-	get(target) {
-		const lat = parseFloat(target.get('lat'));
-		const lon = parseFloat(target.get('lon'));
+	async get(target: RequestTarget): Promise<Record<string,Location>|{error: string}> {
+		const lat = parseFloat(target.get('lat') as string);
+		const lon = parseFloat(target.get('lon') as string);
 
 		if (isNaN(lat) || isNaN(lon)) {
 			return { error: 'lat and lon query parameters are required' };

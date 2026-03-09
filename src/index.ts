@@ -1,10 +1,10 @@
-import {Geolookup} from './resources/Geolookup.ts';
-import {DataLoad} from './resources/DataLoad.ts';
+import {Geolookup} from './resources/Geolookup.js';
+import {DataLoad} from './resources/DataLoad.js';
 import {Scope} from 'harperdb';
-import type {GeolookupConfig} from "./types.ts";
+import type {GeolookupConfig} from "./types.js";
 export {Geolookup, DataLoad};
-export type {Location, Cell} from './types.ts';
-
+export type {Location, Cell} from './types.js';
+export type {RequestTarget} from './types.js'
 /**
  * Plugin entry point called by Harper during startup.
  *
