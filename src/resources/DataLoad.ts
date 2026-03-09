@@ -20,7 +20,7 @@ const DATA_DIR = new URL('../../data/', import.meta.url).pathname;
  * @param countField - Name of the count field to update on the job (e.g. 'location_count')
  * @returns Total number of records loaded across all files
  */
-async function loadTableFiles(dir: string, table: any, idField: string, jobId: string, countField: string) {
+async function loadTableFiles(dir: string, table: { put(id: string, record: unknown, txn: unknown): Promise<void> }, idField: string, jobId: string, countField: string) {
 	let count = 0;
 	if (!existsSync(dir)) return count;
 

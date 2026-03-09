@@ -1,5 +1,6 @@
 import { latLngToCell, cellToParent } from 'h3-js';
 import { databases } from 'harperdb';
+import type { Location, Cell as CellType } from '../types.ts';
 const { Location, Cell } = databases.geolookup;
 
 // Tiers map to US administrative hierarchy levels:
@@ -81,12 +82,12 @@ export class Geolookup extends Resource {
 		}
 
 		// Only select relationship joins for the tiers we care about
-		const select: any[] = ['h3_index'];
+		const select: (string | { name: string; select: string[] })[] = ['h3_index'];
 		if (tiers.has('1')) select.push({ name: 'place', select: LOCATION_SELECT });
 		if (tiers.has('2')) select.push({ name: 'county_subdivision', select: LOCATION_SELECT });
 		if (tiers.has('3')) select.push({ name: 'county', select: LOCATION_SELECT });
 
-		const result: Record<string, any> = {};
+		const result: Record<string, Location> = {};
 		for await (const cell of Cell.search({
 			select,
 			conditions,

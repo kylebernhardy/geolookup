@@ -3,6 +3,7 @@ import {DataLoad} from './resources/DataLoad.ts';
 import {Scope} from 'harperdb';
 import type {GeolookupConfig} from "./types.ts";
 export {Geolookup, DataLoad};
+export type {Location, Cell} from './types.ts';
 
 /**
  * Plugin entry point called by Harper during startup.

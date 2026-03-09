@@ -1,6 +1,6 @@
 {
 	"name": "geolookup-plugin",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"description": "A Harper plugin for fast, tier-based reverse geocoding of US coordinates using H3 spatial indexing.",
 	"license": "Apache-2.0",
 	"type": "module",
