@@ -198,9 +198,23 @@ Then, in the consuming application's `config.yaml`, reference the Geolookup comp
 | `exposeDataLoadService` | `boolean` | `false` | When `true`, the DataLoad resource is registered and accessible via REST at the path specified by `dataLoadServiceName`. Provides a bulk data loading endpoint for populating the `Location` and `Cell` tables from pre-packaged state data files. |
 | `dataLoadServiceName` | `string` | - | The name under which the DataLoad resource is registered. This becomes the URL path segment for the endpoint (e.g. setting it to `"dataload"` exposes the service at `/dataload`). Required when `exposeDataLoadService` is `true`. |
 
-### Direct Export
+### Exports
 
-The `Geolookup` class is also exported directly from the plugin module, so consuming applications can import and use it in their own resources or custom logic without going through the REST endpoint.
+The plugin module exports the following classes, types, and functions:
+
+| Export | Kind | Description |
+|--------|------|-------------|
+| `Geolookup` | Class | Reverse geocoding resource. Can be used programmatically or registered as a REST endpoint. |
+| `DataLoad` | Class | Bulk data loading resource for populating Location and Cell tables. |
+| `Location` | Type | TypeScript interface for Location records (places, county subdivisions, counties). |
+| `Cell` | Type | TypeScript interface for Cell records (H3 spatial index entries). |
+| `RequestTarget` | Type | Re-export of Harper's `RequestTarget` type for typing resource method parameters. |
+| `handleApplication` | Function | Plugin entry point called by Harper during startup. Typically not imported directly. |
+
+```ts
+import { Geolookup, DataLoad } from 'geolookup-plugin';
+import type { Location, Cell } from 'geolookup-plugin';
+```
 
 ## API Usage
 

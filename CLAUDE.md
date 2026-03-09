@@ -21,8 +21,8 @@ Geolookup is a Harper application that performs reverse geocoding. Given lat/lon
 
 **Harper Component App** -configured via `config.yaml`, which points to `src/index.ts` as the plugin module.
 
-- `src/index.ts` -Plugin entry point. Exports `Geolookup` and `DataLoad` resources. Implements `handleApplication()` which conditionally registers services based on scope options (`exposeGeoService`/`geoServiceName`, `exposeDataLoadService`/`dataLoadServiceName`).
-- `src/types.ts` -Defines the `GeolookupConfig` interface for plugin configuration options.
+- `src/index.ts` -Plugin entry point. Exports `Geolookup` and `DataLoad` classes, `Location`, `Cell`, and `RequestTarget` types, and the `handleApplication()` function which conditionally registers services based on scope options (`exposeGeoService`/`geoServiceName`, `exposeDataLoadService`/`dataLoadServiceName`).
+- `src/types.ts` -Defines `GeolookupConfig` (plugin configuration options), `Location`, `Cell`, and `DataLoadJob` interfaces, and re-exports the `RequestTarget` type from `harperdb`.
 - `src/resources/Geolookup.ts` -Core logic. Extends Harper `Resource`. The `get()` handler accepts `lat`/`lon` query params, converts to H3 index at resolution 9, then searches `Cell` table with progressively coarser resolutions (9→2) to find the best location match. Priority: place > county_subdivision > county.
 - `src/resources/DataLoad.ts` -Bulk data loading endpoint. Accepts a `state` query param, validates the tar file exists, creates a `DataLoadJob` record, and returns the job ID immediately. Extraction and loading run asynchronously, updating job progress through status transitions (`pending` → `extracting` → `loading_locations` → `loading_cells` → `completed`/`error`).
 - `schemas/schema.graphql` -Defines three tables in the `geolookup` database:
