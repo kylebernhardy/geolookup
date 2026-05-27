@@ -1,15 +1,13 @@
 import assert from 'node:assert/strict';
-import { test, mock, beforeEach } from 'node:test';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { test, mock } from 'node:test';
 
 // The DataLoad resource depends on Harper globals (Resource, databases, transaction)
-// and runs background processing. We test the get() validation logic by recreating
-// the class with the same contract, mocking the Harper dependencies.
+// and the harper npm package's databases.geolookup accessor evaluates at module load,
+// which can't happen outside a Harper runtime. So we recreate the get() handler's
+// contract here with mocked Harper dependencies. The download/extract path is
+// covered separately in test/dataDownload.test.js — the helpers it exercises are
+// pure functions composed by processDataLoad.
 
-const DATA_DIR = new URL('../data/', import.meta.url).pathname;
-
-// Track calls to mocked Harper tables
 let putCalls = [];
 let patchCalls = [];
 
@@ -28,8 +26,10 @@ function createDataLoad() {
 		patch: mock.fn(async (id, data) => { patchCalls.push({ id, data }); }),
 	};
 
-	// Recreate the get() logic from DataLoad to test validation and job creation
-	// without requiring the Harper runtime
+	// Mirrors DataLoad.get() in src/resources/DataLoad.ts: validate state,
+	// create a job, fire-and-forget background processing, return jobId.
+	// Background processing is NOT modeled here — see dataDownload.test.js for
+	// the helpers it composes.
 	class DataLoad {
 		async get(target) {
 			const state = target.get('state');
@@ -38,11 +38,6 @@ function createDataLoad() {
 			}
 
 			const stateLower = state.toLowerCase();
-			const tarPath = join(DATA_DIR, `${stateLower}.tar.gz`);
-			if (!existsSync(tarPath)) {
-				return { error: `No data file found for state: ${stateLower}` };
-			}
-
 			const jobId = 'test-uuid';
 			await mockDataLoadJob.put(jobId, {
 				state: stateLower,
@@ -73,28 +68,29 @@ test('returns error when state param is null', async () => {
 	assert.deepStrictEqual(result, { error: 'state query parameter is required' });
 });
 
-test('returns error when tar file does not exist', async () => {
+test('does not create job when state is missing', async () => {
 	const { DataLoad } = createDataLoad();
 	const dl = new DataLoad();
-	const result = await dl.get(createMockTarget({ state: 'Nonexistent' }));
-	assert.ok(result.error.includes('No data file found'));
-	assert.ok(result.error.includes('nonexistent'), 'should lowercase the state name in error');
+	await dl.get(createMockTarget({}));
+	assert.equal(putCalls.length, 0);
 });
 
 test('lowercases state name', async () => {
-	const { DataLoad, mockDataLoadJob } = createDataLoad();
+	const { DataLoad } = createDataLoad();
 	const dl = new DataLoad();
-	// Wyoming exists in the data directory
 	const result = await dl.get(createMockTarget({ state: 'WYOMING' }));
 	assert.ok(result.jobId, 'should return a jobId');
 	assert.equal(putCalls.length, 1);
 	assert.equal(putCalls[0].data.state, 'wyoming');
 });
 
-test('returns jobId for valid state', async () => {
+test('returns jobId for any non-empty state', async () => {
 	const { DataLoad } = createDataLoad();
 	const dl = new DataLoad();
-	const result = await dl.get(createMockTarget({ state: 'wyoming' }));
+	// Pre-validation of state-against-data is gone; any non-empty state creates
+	// a job. Bad states surface async via DataLoadJob.error_message after a
+	// failed download from GitHub Releases.
+	const result = await dl.get(createMockTarget({ state: 'atlantis' }));
 	assert.ok(result.jobId);
 	assert.equal(typeof result.jobId, 'string');
 });
@@ -111,20 +107,6 @@ test('creates job record with correct initial values', async () => {
 	assert.equal(job.location_count, 0);
 	assert.equal(job.cell_count, 0);
 	assert.ok(job.started_at, 'should have a started_at timestamp');
-});
-
-test('does not create job when state is missing', async () => {
-	const { DataLoad } = createDataLoad();
-	const dl = new DataLoad();
-	await dl.get(createMockTarget({}));
-	assert.equal(putCalls.length, 0);
-});
-
-test('does not create job when tar file does not exist', async () => {
-	const { DataLoad } = createDataLoad();
-	const dl = new DataLoad();
-	await dl.get(createMockTarget({ state: 'Atlantis' }));
-	assert.equal(putCalls.length, 0);
 });
 
 test('handles state names with spaces', async () => {
@@ -146,7 +128,6 @@ test('handles mixed case state names with spaces', async () => {
 test('handles territory names', async () => {
 	const { DataLoad } = createDataLoad();
 	const dl = new DataLoad();
-
 	const result = await dl.get(createMockTarget({ state: 'Puerto Rico' }));
 	assert.ok(result.jobId);
 	assert.equal(putCalls[0].data.state, 'puerto rico');
@@ -155,7 +136,6 @@ test('handles territory names', async () => {
 test('handles abbreviation territories', async () => {
 	const { DataLoad } = createDataLoad();
 	const dl = new DataLoad();
-
 	const result = await dl.get(createMockTarget({ state: 'DC' }));
 	assert.ok(result.jobId);
 	assert.equal(putCalls[0].data.state, 'dc');

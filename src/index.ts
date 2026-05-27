@@ -1,5 +1,5 @@
 import {Geolookup} from './resources/Geolookup.js';
-import {DataLoad} from './resources/DataLoad.js';
+import {DataLoad, configureDataLoad} from './resources/DataLoad.js';
 import {Scope} from 'harper';
 import type {GeolookupConfig} from "./types.js";
 export {Geolookup, DataLoad};
@@ -18,6 +18,13 @@ export type {RequestTarget} from './types.js'
  */
 export function handleApplication(scope: Scope) {
     const options = (scope.options.getAll() || {}) as GeolookupConfig;
+
+    // Wire data-fetch config into DataLoad regardless of whether the endpoint
+    // is exposed — DataLoad may be invoked programmatically too.
+    configureDataLoad({
+        dataVersion: options.dataVersion,
+        dataBaseUrl: options.dataBaseUrl,
+    });
 
     if (options.exposeGeoService) {
         scope.resources.set(options.geoServiceName, Geolookup);
