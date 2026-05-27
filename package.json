@@ -29,7 +29,7 @@
 	},
 	"engines": {
 		"node": ">=24.0.0",
-		"harperdb": ">=4.7.0"
+		"harper": ">=5.0.0"
 	},
 	"files": [
 		"dist/",
@@ -43,24 +43,25 @@
 		"build": "tsc || true",
 		"agent:run": "npx -y @harperfast/agent@latest",
 		"agent:skills:update": "npx -y skills@latest add harperfast/skills --all --yes",
-		"start": "harperdb run .",
-		"dev": "harperdb dev .",
+		"start": "harper run .",
+		"dev": "harper dev .",
 		"lint": "eslint .",
 		"format": "prettier --write .",
 		"test": "node --test test/*.test.js",
 		"test:watch": "node --watch --test test/*.test.js",
 		"deploy": "dotenv -- npm run deploy:component",
-		"deploy:component": "harperdb deploy_component . restart=rolling replicated=true"
+		"deploy:component": "harper deploy_component . restart=rolling replicated=true"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"dotenv-cli": "^11.0.0",
 		"eslint": "^10.0.2",
 		"globals": "^17.4.0",
-		"harperdb": "^4.7.20",
+		"harper": "^5.0.21",
 		"prettier": "^3.8.1"
 	},
 	"dependencies": {
-		"h3-js": "^4.4.0"
+		"h3-js": "^4.4.0",
+		"tar": "^7.5.15"
 	}
 }

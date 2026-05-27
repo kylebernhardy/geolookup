@@ -1,5 +1,5 @@
-import {databases, RequestTarget} from 'harperdb';
-import { execFileSync } from 'node:child_process';
+import {databases, RequestTarget} from 'harper';
+import { extract as tarExtract } from 'tar';
 import { readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -60,9 +60,9 @@ async function processDataLoad(jobId: string, state: string, tarPath: string) {
 	let cellCount = 0;
 
 	try {
-		// Uses execFileSync (no shell) to avoid injection risks
+		// node-tar (pure JS) — avoids spawning a child process so Harper's sandbox can load this module
 		await DataLoadJob.patch(jobId, { status: 'extracting' });
-		execFileSync('tar', ['-xzf', tarPath, '-C', DATA_DIR]);
+		await tarExtract({ file: tarPath, cwd: DATA_DIR });
 
 		const stateDir = join(DATA_DIR, state);
 		if (!existsSync(stateDir)) {
