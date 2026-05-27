@@ -1,5 +1,5 @@
 import { latLngToCell, cellToParent } from 'h3-js';
-import { databases, RequestTarget } from 'harperdb';
+import { databases, RequestTarget } from 'harper';
 import type { Location } from '../types.js';
 const { Location, Cell } = databases.geolookup;
 

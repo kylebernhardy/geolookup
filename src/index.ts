@@ -1,6 +1,6 @@
 import {Geolookup} from './resources/Geolookup.js';
 import {DataLoad} from './resources/DataLoad.js';
-import {Scope} from 'harperdb';
+import {Scope} from 'harper';
 import type {GeolookupConfig} from "./types.js";
 export {Geolookup, DataLoad};
 export type {Location, Cell} from './types.js';

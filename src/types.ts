@@ -54,4 +54,4 @@ export interface DataLoadJob {
 	duration_ms: number;
 }
 
-export type {RequestTarget} from 'harperdb';
+export type {RequestTarget} from 'harper';
