@@ -8,18 +8,18 @@ import { test, beforeEach } from 'node:test';
 globalThis.Resource = class Resource {};
 globalThis.transaction = () => {};
 
-// Stub the harperdb module so the resource files can import { databases }
+// Stub the harper module so the resource files can import { databases }
 import { register } from 'node:module';
 
-// We need to mock harperdb before importing index.ts. Use a simple approach:
+// We need to mock harper before importing index.ts. Use a simple approach:
 // register a loader isn't feasible here, so we mock via --import or direct stub.
 // Instead, we'll test handleApplication by importing it after setting up globals.
 
-// Since harperdb is an external dependency that may not resolve without Harper runtime,
+// Since harper is an external dependency that may not resolve without Harper runtime,
 // we test handleApplication logic by recreating its behavior with the same contract.
 
 function createHandleApplication() {
-	// Mirror the logic from src/index.ts without requiring the harperdb import
+	// Mirror the logic from src/index.ts without requiring the harper import
 	return function handleApplication(scope) {
 		const options = (scope.options.getAll() || {});
 

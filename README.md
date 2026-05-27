@@ -450,7 +450,7 @@ The following states and territories have pre-packaged data files available for 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) v24+ (see `.nvmrc`)
-- [Harper](https://docs.harperdb.io/docs/deployments/install-harper) installed globally: `npm install -g harperdb`
+- [Harper](https://docs.harperdb.io/docs/deployments/install-harper) installed globally: `npm install -g harper`
 
 ### Setup
 
