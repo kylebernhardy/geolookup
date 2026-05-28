@@ -394,6 +394,26 @@ You can also list all jobs:
 curl "http://localhost:9926/DataLoadJob"
 ```
 
+#### Filtering
+
+The `state` and `status` columns are `@indexed`, so you can filter directly via query params — useful when [auto-loading on startup](#auto-load-on-startup) (which doesn't surface jobIds to the caller) or when watching a batch in flight:
+
+```sh
+# Every job for a specific state (newest first)
+curl "http://localhost:9926/DataLoadJob?state=dc"
+
+# Currently in-flight loads
+curl "http://localhost:9926/DataLoadJob?status=downloading"
+curl "http://localhost:9926/DataLoadJob?status=extracting"
+curl "http://localhost:9926/DataLoadJob?status=loading_locations"
+curl "http://localhost:9926/DataLoadJob?status=loading_cells"
+
+# Anything that errored
+curl "http://localhost:9926/DataLoadJob?status=error"
+```
+
+Filters combine — `?state=dc&status=completed` returns just the completed DC loads (the existence of one of these is exactly what `autoLoadStates`'s idempotency check tests for).
+
 #### DataLoadJob Fields
 
 | Field | Description |
@@ -486,6 +506,20 @@ For dev environments, fresh clones, ephemeral CI/test instances, etc. — instea
 - Errors land in the per-state `DataLoadJob` record (`status: 'error'`, `error_message: ...`) and do not crash boot. A bad state name, a 404 from GitHub Releases, or a transient network failure all behave the same way.
 - `'all'` resolves to every state/territory in the plugin's built-in list (50 states + DC + American Samoa, CNMI, Guam, Puerto Rico, USVI).
 - Logged at `info` on Harper's logger: one summary line on boot listing every state queued, plus one `kicked off (jobId ...)` line per state as the background work spawns. Skipped/already-loaded states log at `debug`. Tail `~/harper/log/hdb.log` to confirm autoload ran.
+
+**Checking progress without the jobId.** Because autoload doesn't return jobIds to a caller, use the `DataLoadJob` REST resource's [filtering](#filtering) to inspect status:
+
+```sh
+# Is DC done?
+curl "http://localhost:9926/DataLoadJob?state=dc&status=completed"
+
+# What's currently in flight?
+curl "http://localhost:9926/DataLoadJob?status=downloading"
+curl "http://localhost:9926/DataLoadJob?status=loading_locations"
+
+# Any errors during this boot's autoload?
+curl "http://localhost:9926/DataLoadJob?status=error"
+```
 
 **Force-refresh / re-loading:** out of scope today. To re-load a state, delete its `DataLoadJob` records via the REST endpoint, then restart.
 
