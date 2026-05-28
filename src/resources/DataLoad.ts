@@ -4,8 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { buildTarUrl } from '../dataConfig.ts';
-import { downloadStateTar, extractStateTar } from './dataDownload.ts';
+import { buildTarUrl } from '../dataConfig.js';
+import { downloadStateTar, extractStateTar } from './dataDownload.js';
 
 const { Location, Cell, DataLoadJob } = databases.geolookup;
 

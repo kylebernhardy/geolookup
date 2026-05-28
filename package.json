@@ -50,7 +50,8 @@
 		"test:watch": "node --watch --test test/*.test.js",
 		"data:publish": "node scripts/publish-data.mjs",
 		"deploy": "dotenv -- npm run deploy:component",
-		"deploy:component": "harper deploy_component . restart=rolling replicated=true"
+		"deploy:component": "harper deploy_component . restart=rolling replicated=true",
+		"prepack": "npm run build"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -58,7 +59,8 @@
 		"eslint": "^10.0.2",
 		"globals": "^17.4.0",
 		"harper": "^5.0.21",
-		"prettier": "^3.8.1"
+		"prettier": "^3.8.1",
+		"typescript": "^5.9.3"
 	},
 	"dependencies": {
 		"h3-js": "^4.4.0",
