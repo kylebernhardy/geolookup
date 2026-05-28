@@ -204,6 +204,7 @@ Then, in the consuming application's `config.yaml`, reference the Geolookup comp
 | `dataLoadServiceName` | `string` | - | The name under which the DataLoad resource is registered. This becomes the URL path segment for the endpoint (e.g. setting it to `"dataload"` exposes the service at `/dataload`). Required when `exposeDataLoadService` is `true`. |
 | `dataVersion` | `string` | Plugin-baked default (e.g. `"data-2026.05"`) | Override the data revision tag the loader fetches at runtime. Set this in a consuming app's `config.yaml` to pin a specific dataset, or to roll forward to a newer one without upgrading the plugin's npm version. |
 | `dataBaseUrl` | `string` | `"https://github.com/kylebernhardy/geolookup/releases/download"` | Override the base URL the loader fetches archives from. Useful for mirrors, internal proxies, air-gapped environments, or pointing tests at a local fake server. |
+| `autoLoadStates` | `string[] \| "all"` | _(off)_ | Auto-load these states on Harper startup, in the background, fire-and-forget. Pass an array of state names (case-insensitive) or `"all"` for every published state. Idempotent — already-loaded states are skipped. See [Auto-load on startup](#auto-load-on-startup). |
 
 ### Exports
 
@@ -460,6 +461,32 @@ The following states and territories have data archives published in the [geoloo
 | american samoa | cnmi |
 | dc | guam |
 | puerto rico | usvi |
+
+### Auto-load on startup
+
+For dev environments, fresh clones, ephemeral CI/test instances, etc. — instead of exposing the `DataLoad` HTTP endpoint and orchestrating curl+poll cycles, set `autoLoadStates` and the plugin will populate the tables on every Harper startup.
+
+```yaml
+'geolookup-plugin':
+  package: 'geolookup-plugin'
+  exposeGeoService: true
+  geoServiceName: 'geo'
+  # No need to expose DataLoad — autoLoad runs server-side at boot:
+  exposeDataLoadService: false
+  # Pick specific states for dev:
+  autoLoadStates: ['dc', 'colorado']
+  # ...or load everything (56 states/territories, ~40 MB total):
+  # autoLoadStates: 'all'
+```
+
+**Semantics:**
+
+- Runs in the background after `handleApplication` finishes — does not block Harper startup.
+- Idempotent across restarts: each state is loaded only if no `DataLoadJob` record exists with `status: 'completed'` for it. Subsequent restarts skip already-loaded states.
+- Errors land in the per-state `DataLoadJob` record (`status: 'error'`, `error_message: ...`) and do not crash boot. A bad state name, a 404 from GitHub Releases, or a transient network failure all behave the same way.
+- `'all'` resolves to every state/territory in the plugin's built-in list (50 states + DC + American Samoa, CNMI, Guam, Puerto Rico, USVI).
+
+**Force-refresh / re-loading:** out of scope today. To re-load a state, delete its `DataLoadJob` records via the REST endpoint, then restart.
 
 ### Publishing a New Data Release
 

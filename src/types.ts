@@ -17,6 +17,14 @@ export interface GeolookupConfig {
 
     /** Override the data revision tag (e.g. `"data-2026.05"`). Defaults to the version baked into the plugin. */
     dataVersion?: string;
+
+    /**
+     * Auto-load these states on plugin startup. Pass an array of state names (case-insensitive),
+     * or `'all'` for every published state/territory. Idempotent — states that already have a
+     * completed `DataLoadJob` are skipped. Runs in the background; does not block Harper startup.
+     * Failed loads surface via `DataLoadJob.status = 'error'` but never crash boot.
+     */
+    autoLoadStates?: string[] | 'all';
 }
 
 export interface Location {

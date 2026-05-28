@@ -1,7 +1,8 @@
 import {Geolookup} from './resources/Geolookup.js';
-import {DataLoad, configureDataLoad} from './resources/DataLoad.js';
+import {DataLoad, configureDataLoad, isStateLoaded, kickoffLoad} from './resources/DataLoad.js';
 import {Scope} from 'harper';
 import type {GeolookupConfig} from "./types.js";
+import {resolveAutoLoadStates} from './availableStates.js';
 export {Geolookup, DataLoad};
 export type {Location, Cell} from './types.js';
 export type {RequestTarget} from './types.js'
@@ -32,5 +33,21 @@ export function handleApplication(scope: Scope) {
 
     if (options.exposeDataLoadService) {
         scope.resources.set(options.dataLoadServiceName, DataLoad);
+    }
+
+    // Auto-load configured states in the background. Fire-and-forget so plugin
+    // init never blocks Harper startup, and a failed load (bad name, 404 from
+    // GitHub Releases, transient network) lands on its DataLoadJob record
+    // rather than crashing boot.
+    const statesToAutoLoad = resolveAutoLoadStates(options.autoLoadStates);
+    if (statesToAutoLoad.length > 0) {
+        queueMicrotask(() => {
+            void Promise.all(
+                statesToAutoLoad.map(async (state) => {
+                    if (await isStateLoaded(state)) return;
+                    await kickoffLoad(state);
+                }),
+            ).catch(() => {});
+        });
     }
 }
