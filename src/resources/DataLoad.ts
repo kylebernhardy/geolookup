@@ -1,30 +1,38 @@
 import {databases, RequestTarget} from 'harper';
-import { extract as tarExtract } from 'tar';
-import { readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { buildTarUrl } from '../dataConfig.ts';
+import { downloadStateTar, extractStateTar } from './dataDownload.ts';
 
 const { Location, Cell, DataLoadJob } = databases.geolookup;
-const DATA_DIR = new URL('../../data/', import.meta.url).pathname;
+
+/** Per-instance config injected by handleApplication() in src/index.ts. */
+let runtimeConfig: { dataVersion?: string; dataBaseUrl?: string } = {};
+
+/** Wires plugin config (dataVersion, dataBaseUrl) into DataLoad before the resource is used. */
+export function configureDataLoad(opts: { dataVersion?: string; dataBaseUrl?: string }): void {
+	runtimeConfig = { ...opts };
+}
 
 /**
  * Reads all JSON files from a directory and loads each file's records into the
- * given Harper table within a transaction. Each JSON file is expected to contain
- * an array of records. After each file is loaded, the DataLoadJob record is
- * updated with the running count.
- *
- * @param dir - Absolute path to the directory containing JSON files
- * @param table - Harper table instance to load records into
- * @param idField - Name of the field to use as the record's primary key
- * @param jobId - UUID of the DataLoadJob record to update with progress
- * @param countField - Name of the count field to update on the job (e.g. 'location_count')
- * @returns Total number of records loaded across all files
+ * given Harper table within a transaction. After each file is loaded, the
+ * DataLoadJob record is updated with the running count.
  */
-async function loadTableFiles(dir: string, table: { put(id: string, record: unknown, txn: unknown): Promise<void> }, idField: string, jobId: string, countField: string) {
+async function loadTableFiles(
+	dir: string,
+	table: { put(id: string, record: unknown, txn: unknown): Promise<void> },
+	idField: string,
+	jobId: string,
+	countField: string,
+) {
 	let count = 0;
 	if (!existsSync(dir)) return count;
 
-	const files = readdirSync(dir).filter(f => f.endsWith('.json'));
+	const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
 	for (const file of files) {
 		const records = JSON.parse(readFileSync(join(dir, file), 'utf-8'));
 		await transaction(async (txn) => {
@@ -39,100 +47,74 @@ async function loadTableFiles(dir: string, table: { put(id: string, record: unkn
 }
 
 /**
- * Runs data extraction and loading in the background. Updates the DataLoadJob
- * record as it progresses through each step:
- *   extracting → loading_locations → loading_cells → completed (or error)
+ * Background worker for a single data load job. Status transitions:
+ *   downloading → extracting → loading_locations → loading_cells → completed
+ *   (or error at any stage; error_message captures detail)
  *
- * On success, marks the job as completed with final counts and duration.
- * On error, marks the job with status "error" and captures the error message.
- * The extracted state folder is always cleaned up, even on failure.
- *
- * Locations are loaded before Cells because Cell records reference Location IDs
- * via their tier_1/tier_2/tier_3 foreign keys.
- *
- * @param jobId - UUID of the DataLoadJob record to update
- * @param state - Lowercase state name (matches the extracted directory name)
- * @param tarPath - Absolute path to the .tar.gz archive
+ * Each job runs in its own os.tmpdir() workspace which is removed in finally.
+ * Locations load before Cells because Cell records reference Location IDs.
  */
-async function processDataLoad(jobId: string, state: string, tarPath: string) {
+async function processDataLoad(jobId: string, state: string) {
 	const startTime = Date.now();
 	let locationCount = 0;
 	let cellCount = 0;
+	const workDir = await mkdtemp(join(tmpdir(), `geolookup-${jobId}-`));
+	const tarPath = join(workDir, `${state}.tar.gz`);
+	const url = buildTarUrl(state, runtimeConfig);
 
 	try {
-		// node-tar (pure JS) — avoids spawning a child process so Harper's sandbox can load this module
-		await DataLoadJob.patch(jobId, { status: 'extracting' });
-		await tarExtract({ file: tarPath, cwd: DATA_DIR });
+		await DataLoadJob.patch(jobId, { status: 'downloading' });
+		await downloadStateTar(url, tarPath);
 
-		const stateDir = join(DATA_DIR, state);
+		await DataLoadJob.patch(jobId, { status: 'extracting' });
+		await extractStateTar(tarPath, workDir);
+
+		const stateDir = join(workDir, state);
 		if (!existsSync(stateDir)) {
 			throw new Error(`Expected directory ${state} not found after extraction`);
 		}
 
-		try {
-			await DataLoadJob.patch(jobId, { status: 'loading_locations' });
-			locationCount = await loadTableFiles(join(stateDir, 'Location'), Location, 'id', jobId, 'location_count');
+		await DataLoadJob.patch(jobId, { status: 'loading_locations' });
+		locationCount = await loadTableFiles(join(stateDir, 'Location'), Location, 'id', jobId, 'location_count');
 
-			await DataLoadJob.patch(jobId, { status: 'loading_cells' });
-			cellCount = await loadTableFiles(join(stateDir, 'Cell'), Cell, 'h3_index', jobId, 'cell_count');
-		} finally {
-			// Always clean up the extracted folder, even if loading fails partway through
-			rmSync(stateDir, { recursive: true, force: true });
-		}
+		await DataLoadJob.patch(jobId, { status: 'loading_cells' });
+		cellCount = await loadTableFiles(join(stateDir, 'Cell'), Cell, 'h3_index', jobId, 'cell_count');
 
-		const durationMs = Date.now() - startTime;
 		await DataLoadJob.patch(jobId, {
 			status: 'completed',
 			location_count: locationCount,
 			cell_count: cellCount,
 			completed_at: new Date().toISOString(),
-			duration_ms: durationMs,
+			duration_ms: Date.now() - startTime,
 		});
 	} catch (err: any) {
-		const durationMs = Date.now() - startTime;
 		await DataLoadJob.patch(jobId, {
 			status: 'error',
 			error_message: err.message,
 			location_count: locationCount,
 			cell_count: cellCount,
 			completed_at: new Date().toISOString(),
-			duration_ms: durationMs,
+			duration_ms: Date.now() - startTime,
 		});
+	} finally {
+		await rm(workDir, { recursive: true, force: true });
 	}
 }
 
 /**
- * Async bulk loading endpoint for populating Location and Cell tables from
- * pre-packaged state data files. Validates the request, creates a DataLoadJob
- * record for tracking, and returns the job ID immediately. The actual data
- * extraction and loading runs in the background — callers poll the DataLoadJob
- * table to check progress.
+ * Async bulk loading endpoint. Validates the request, creates a DataLoadJob
+ * record for tracking, and returns the job ID immediately. The actual
+ * download, extraction, and loading run in the background — poll
+ * DataLoadJob to check progress and surface errors.
  */
 export class DataLoad extends Resource {
-	/**
-	 * Handles GET requests to initiate a data load job.
-	 *
-	 * Validates the state parameter, checks that the corresponding .tar.gz file
-	 * exists, creates a DataLoadJob record, and kicks off background processing.
-	 * Returns the job ID immediately so the caller can poll for progress.
-	 *
-	 * @param target - Harper request target containing query parameters
-	 * @returns Object with jobId on success, or an error object on validation failure
-	 */
 	async get(target: RequestTarget) {
 		const state = target.get('state');
 		if (!state) {
 			return { error: 'state query parameter is required' };
 		}
 
-		// Normalize to lowercase to match the tar.gz filenames in the data directory
 		const stateLower = state.toLowerCase();
-		const tarPath = join(DATA_DIR, `${stateLower}.tar.gz`);
-		if (!existsSync(tarPath)) {
-			return { error: `No data file found for state: ${stateLower}` };
-		}
-
-		// Create the job record and return the ID to the caller immediately
 		const jobId = randomUUID();
 		await DataLoadJob.put(jobId, {
 			state: stateLower,
@@ -142,9 +124,10 @@ export class DataLoad extends Resource {
 			started_at: new Date().toISOString(),
 		});
 
-		// Fire and forget — errors are captured in the job record, .catch() prevents
-		// unhandled rejection if the DataLoadJob.patch itself fails in the catch block
-		processDataLoad(jobId, stateLower, tarPath).catch(() => {});
+		// Fire and forget — errors are captured in the job record. The .catch()
+		// guards against an unhandled rejection if the patch in the catch block
+		// itself fails (e.g. transient DB error).
+		processDataLoad(jobId, stateLower).catch(() => {});
 
 		return { jobId };
 	}

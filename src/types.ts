@@ -12,6 +12,11 @@ export interface GeolookupConfig {
     /** The URL path segment for the DataLoad endpoint (e.g. `"dataload"` exposes it at `/dataload`). Required when `exposeDataLoadService` is `true`. */
     dataLoadServiceName?: string;
 
+    /** Override the data-archive base URL. Defaults to the geolookup GitHub Releases URL. */
+    dataBaseUrl?: string;
+
+    /** Override the data revision tag (e.g. `"data-2026.05"`). Defaults to the version baked into the plugin. */
+    dataVersion?: string;
 }
 
 export interface Location {
