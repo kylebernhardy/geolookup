@@ -34,7 +34,6 @@
 	"files": [
 		"dist/",
 		"schemas/",
-		"data/",
 		"config.yaml",
 		"LICENSE",
 		"README.md"
