@@ -53,8 +53,11 @@ async function loadTableFiles(
  *
  * Each job runs in its own os.tmpdir() workspace which is removed in finally.
  * Locations load before Cells because Cell records reference Location IDs.
+ *
+ * Exported so callers other than the HTTP endpoint (e.g. autoLoadStates in
+ * handleApplication) can re-use the same loader.
  */
-async function processDataLoad(jobId: string, state: string) {
+export async function processDataLoad(jobId: string, state: string) {
 	const startTime = Date.now();
 	let locationCount = 0;
 	let cellCount = 0;
@@ -102,6 +105,54 @@ async function processDataLoad(jobId: string, state: string) {
 }
 
 /**
+ * Creates a `DataLoadJob` record (status `pending`) and fires `processDataLoad`
+ * in the background. Returns the new `jobId` once the record is persisted so the
+ * caller can poll progress immediately.
+ *
+ * Both the HTTP `DataLoad.get()` endpoint and the autoLoadStates startup hook
+ * use this to keep the put-then-spawn pattern in one place.
+ */
+export async function kickoffLoad(state: string): Promise<string> {
+	const stateLower = state.toLowerCase();
+	const jobId = randomUUID();
+	await DataLoadJob.put(jobId, {
+		state: stateLower,
+		status: 'pending',
+		location_count: 0,
+		cell_count: 0,
+		started_at: new Date().toISOString(),
+	});
+	// Fire and forget — errors land on the job record. The .catch() guards
+	// against unhandled rejection if the patch in processDataLoad's own catch
+	// block itself fails (e.g. transient DB error).
+	processDataLoad(jobId, stateLower).catch(() => {});
+	return jobId;
+}
+
+/**
+ * Returns true if a `DataLoadJob` with the given (case-insensitive) state has
+ * ever finished with `status: 'completed'`. Used by the autoLoadStates startup
+ * hook to skip states that are already loaded.
+ */
+export async function isStateLoaded(state: string): Promise<boolean> {
+	const stateLower = state.toLowerCase();
+	// `as any` because databases.geolookup destructures into loosely-typed
+	// Resource instances and tsc doesn't pick up the search-options overload.
+	// Same workaround pattern as src/resources/Geolookup.ts (Cell.search).
+	for await (const _ of (DataLoadJob as any).search({
+		conditions: [
+			{ attribute: 'state', value: stateLower },
+			{ attribute: 'status', value: 'completed' },
+		],
+		operator: 'AND',
+		limit: 1,
+	})) {
+		return true;
+	}
+	return false;
+}
+
+/**
  * Async bulk loading endpoint. Validates the request, creates a DataLoadJob
  * record for tracking, and returns the job ID immediately. The actual
  * download, extraction, and loading run in the background — poll
@@ -113,22 +164,7 @@ export class DataLoad extends Resource {
 		if (!state) {
 			return { error: 'state query parameter is required' };
 		}
-
-		const stateLower = state.toLowerCase();
-		const jobId = randomUUID();
-		await DataLoadJob.put(jobId, {
-			state: stateLower,
-			status: 'pending',
-			location_count: 0,
-			cell_count: 0,
-			started_at: new Date().toISOString(),
-		});
-
-		// Fire and forget — errors are captured in the job record. The .catch()
-		// guards against an unhandled rejection if the patch in the catch block
-		// itself fails (e.g. transient DB error).
-		processDataLoad(jobId, stateLower).catch(() => {});
-
+		const jobId = await kickoffLoad(state);
 		return { jobId };
 	}
 }
