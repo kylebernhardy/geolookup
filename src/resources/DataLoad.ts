@@ -139,12 +139,17 @@ export async function isStateLoaded(state: string): Promise<boolean> {
 	// `as any` because databases.geolookup destructures into loosely-typed
 	// Resource instances and tsc doesn't pick up the search-options overload.
 	// Same workaround pattern as src/resources/Geolookup.ts (Cell.search).
+	//
+	// Note: Harper's TypeScript types declare `operator: 'AND' | 'OR'` (uppercase),
+	// but the runtime in core/resources/Table.ts only accepts lowercase 'and' /
+	// 'or' (or `undefined`, which defaults to AND). The types and runtime
+	// disagree; we follow the runtime. Same lowercase pattern as Geolookup.ts.
 	for await (const _ of (DataLoadJob as any).search({
 		conditions: [
 			{ attribute: 'state', value: stateLower },
 			{ attribute: 'status', value: 'completed' },
 		],
-		operator: 'AND',
+		operator: 'and',
 		limit: 1,
 	})) {
 		return true;
