@@ -485,6 +485,7 @@ For dev environments, fresh clones, ephemeral CI/test instances, etc. — instea
 - Idempotent across restarts: each state is loaded only if no `DataLoadJob` record exists with `status: 'completed'` for it. Subsequent restarts skip already-loaded states.
 - Errors land in the per-state `DataLoadJob` record (`status: 'error'`, `error_message: ...`) and do not crash boot. A bad state name, a 404 from GitHub Releases, or a transient network failure all behave the same way.
 - `'all'` resolves to every state/territory in the plugin's built-in list (50 states + DC + American Samoa, CNMI, Guam, Puerto Rico, USVI).
+- Logged at `info` on Harper's logger: one summary line on boot listing every state queued, plus one `kicked off (jobId ...)` line per state as the background work spawns. Skipped/already-loaded states log at `debug`. Tail `~/harper/log/hdb.log` to confirm autoload ran.
 
 **Force-refresh / re-loading:** out of scope today. To re-load a state, delete its `DataLoadJob` records via the REST endpoint, then restart.
 

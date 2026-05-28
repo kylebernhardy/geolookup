@@ -1,6 +1,6 @@
 import {Geolookup} from './resources/Geolookup.js';
 import {DataLoad, configureDataLoad, isStateLoaded, kickoffLoad} from './resources/DataLoad.js';
-import {Scope} from 'harper';
+import {Scope, logger} from 'harper';
 import type {GeolookupConfig} from "./types.js";
 import {resolveAutoLoadStates} from './availableStates.js';
 export {Geolookup, DataLoad};
@@ -38,16 +38,31 @@ export function handleApplication(scope: Scope) {
     // Auto-load configured states in the background. Fire-and-forget so plugin
     // init never blocks Harper startup, and a failed load (bad name, 404 from
     // GitHub Releases, transient network) lands on its DataLoadJob record
-    // rather than crashing boot.
+    // rather than crashing boot. logger calls use optional chaining because
+    // the runtime logger isn't guaranteed to be wired up in every context
+    // (e.g. tests).
     const statesToAutoLoad = resolveAutoLoadStates(options.autoLoadStates);
     if (statesToAutoLoad.length > 0) {
+        logger?.info?.(
+            `[geolookup] autoLoad starting for ${statesToAutoLoad.length} state(s): ${statesToAutoLoad.join(', ')}`,
+        );
         queueMicrotask(() => {
             void Promise.all(
                 statesToAutoLoad.map(async (state) => {
-                    if (await isStateLoaded(state)) return;
-                    await kickoffLoad(state);
+                    if (await isStateLoaded(state)) {
+                        logger?.debug?.(`[geolookup] autoLoad skipped ${state} (already loaded)`);
+                        return;
+                    }
+                    const jobId = await kickoffLoad(state);
+                    logger?.info?.(
+                        `[geolookup] autoLoad ${state} kicked off (jobId ${jobId}) — poll DataLoadJob/${jobId} for progress`,
+                    );
                 }),
-            ).catch(() => {});
+            ).catch((err) => {
+                logger?.warn?.(
+                    `[geolookup] autoLoad batch failure: ${(err as Error)?.message ?? err}`,
+                );
+            });
         });
     }
 }
