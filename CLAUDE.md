@@ -24,12 +24,15 @@ Geolookup is a Harper application that performs reverse geocoding. Given lat/lon
 - `src/index.ts` -Plugin entry point. Exports `Geolookup` and `DataLoad` classes, `Location`, `Cell`, and `RequestTarget` types, and the `handleApplication()` function which conditionally registers services based on scope options (`exposeGeoService`/`geoServiceName`, `exposeDataLoadService`/`dataLoadServiceName`).
 - `src/types.ts` -Defines `GeolookupConfig` (plugin configuration options), `Location`, `Cell`, and `DataLoadJob` interfaces, and re-exports the `RequestTarget` type from `harper`.
 - `src/resources/Geolookup.ts` -Core logic. Extends Harper `Resource`. The `get()` handler accepts `lat`/`lon` query params, converts to H3 index at resolution 9, then searches `Cell` table with progressively coarser resolutions (9→2) to find the best location match. Priority: place > county_subdivision > county.
-- `src/resources/DataLoad.ts` -Bulk data loading endpoint. Accepts a `state` query param, validates the tar file exists, creates a `DataLoadJob` record, and returns the job ID immediately. Extraction and loading run asynchronously, updating job progress through status transitions (`pending` → `extracting` → `loading_locations` → `loading_cells` → `completed`/`error`).
+- `src/resources/DataLoad.ts` -Bulk data loading endpoint. Accepts a `state` query param, creates a `DataLoadJob` record, and returns the job ID immediately. Background work downloads the state's `.tar.gz` from a GitHub Release (URL = `${dataBaseUrl}/${dataVersion}/${state}.tar.gz`), extracts it to an `os.tmpdir()` workspace via `node-tar`, loads JSON into `Location` and `Cell` tables, and cleans up. Status transitions: `pending → downloading → extracting → loading_locations → loading_cells → completed`/`error`. Exports `configureDataLoad()` so `handleApplication()` can inject the `dataVersion`/`dataBaseUrl` plugin config.
+- `src/resources/dataDownload.ts` -`downloadStateTar()` and `extractStateTar()` helpers used by DataLoad. Pure functions, easy to unit-test with mocked `fetch`.
+- `src/dataConfig.ts` -`DEFAULT_DATA_VERSION`, `DEFAULT_DATA_BASE_URL`, and `buildTarUrl()`. Bump `DEFAULT_DATA_VERSION` when publishing a new data release.
+- `scripts/publish-data.mjs` -Dev script that uploads `data/*.tar.gz` to a GitHub Release via the `gh` CLI. Run with `npm run data:publish -- <tag>`.
 - `schemas/schema.graphql` -Defines three tables in the `geolookup` database:
   - `Location` -geographic entities (places, counties, subdivisions) with tier-based hierarchy
   - `Cell` -H3 cells linking to locations at 3 tiers via `@relationship` directives
   - `DataLoadJob` -tracks async data load job progress, exported for direct querying
-- `data/` -Pre-packaged `.tar.gz` files per state/territory containing Location and Cell JSON data
+- `data/` -Source `.tar.gz` files used by `scripts/publish-data.mjs` to cut releases. **Not** shipped in the npm package; consumers download from GitHub Releases at runtime.
 - `config.yaml` -Harper app config; `graphqlSchema` loads schemas, `pluginModule` points to `src/index.ts`
 
 ## Workflow
