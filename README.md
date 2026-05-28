@@ -158,10 +158,11 @@ Geolookup is designed to be used as a Harper [plugin](https://docs.harperdb.io/d
 ```mermaid
 flowchart LR
     A[Harper Startup] --> B["handleApplication(scope)"]
-    B --> C{exposeGeoService?}
+    B --> Z["configureDataLoad({ dataVersion, dataBaseUrl })"]
+    Z --> C{exposeGeoService?}
     C -- Yes --> D["Register Geolookup at /{geoServiceName}"]
     C -- No --> E[Skip]
-    B --> F{exposeDataLoadService?}
+    Z --> F{exposeDataLoadService?}
     F -- Yes --> G["Register DataLoad at /{dataLoadServiceName}"]
     F -- No --> H[Skip]
     D --> I[Ready]
@@ -187,6 +188,10 @@ Then, in the consuming application's `config.yaml`, reference the Geolookup comp
   geoServiceName: 'geo'
   exposeDataLoadService: true
   dataLoadServiceName: 'dataload'
+  # Optional — override the data revision tag (default baked into the plugin):
+  # dataVersion: 'data-2026.05'
+  # Optional — override the archive base URL (defaults to GitHub Releases):
+  # dataBaseUrl: 'https://github.com/kylebernhardy/geolookup/releases/download'
 ```
 
 ### Configuration Options
@@ -195,8 +200,10 @@ Then, in the consuming application's `config.yaml`, reference the Geolookup comp
 |--------|------|---------|-------------|
 | `exposeGeoService` | `boolean` | `false` | When `true`, the Geolookup resource is registered and accessible via REST at the path specified by `geoServiceName`. When `false` or omitted, the plugin loads but does not expose a lookup endpoint. Useful if you want to import and use the `Geolookup` class programmatically without a public-facing REST route. |
 | `geoServiceName` | `string` | - | The name under which the Geolookup resource is registered. This becomes the URL path segment for the endpoint (e.g. setting it to `"geo"` exposes the service at `/geo`). Required when `exposeGeoService` is `true`. |
-| `exposeDataLoadService` | `boolean` | `false` | When `true`, the DataLoad resource is registered and accessible via REST at the path specified by `dataLoadServiceName`. Provides a bulk data loading endpoint for populating the `Location` and `Cell` tables from pre-packaged state data files. |
+| `exposeDataLoadService` | `boolean` | `false` | When `true`, the DataLoad resource is registered and accessible via REST at the path specified by `dataLoadServiceName`. Provides a bulk data loading endpoint that fetches state archives from GitHub Releases on demand and loads them into the `Location` and `Cell` tables. |
 | `dataLoadServiceName` | `string` | - | The name under which the DataLoad resource is registered. This becomes the URL path segment for the endpoint (e.g. setting it to `"dataload"` exposes the service at `/dataload`). Required when `exposeDataLoadService` is `true`. |
+| `dataVersion` | `string` | Plugin-baked default (e.g. `"data-2026.05"`) | Override the data revision tag the loader fetches at runtime. Set this in a consuming app's `config.yaml` to pin a specific dataset, or to roll forward to a newer one without upgrading the plugin's npm version. |
+| `dataBaseUrl` | `string` | `"https://github.com/kylebernhardy/geolookup/releases/download"` | Override the base URL the loader fetches archives from. Useful for mirrors, internal proxies, air-gapped environments, or pointing tests at a local fake server. |
 
 ### Exports
 
@@ -301,15 +308,26 @@ Response includes only `place` and `county` (no `county_subdivision`).
 
 ## Data Loading
 
-Geographic data is pre-packaged as `.tar.gz` files in the `data/` directory, one per state or territory. The `DataLoad` endpoint validates the requested state, creates a tracking job, and immediately returns the job ID. The actual data extraction and loading runs asynchronously in the background. Progress is tracked in the `DataLoadJob` table, which is exported and can be queried directly at any time.
+Geographic data is **not bundled** with the plugin. On demand, the `DataLoad` endpoint creates a tracking job and immediately returns the job ID. The background worker downloads the requested state's `.tar.gz` from the [geolookup GitHub Releases](https://github.com/kylebernhardy/geolookup/releases) into an OS temp directory, extracts it with `node-tar`, and loads `Location` and `Cell` records into Harper. The temp directory is removed when the job finishes (success or error). Progress is tracked in the `DataLoadJob` table, which is exported and can be queried directly at any time.
+
+### Configuration
+
+The loader uses defaults baked into the plugin for both the data revision tag and the archive base URL. Override either via plugin config (see [`dataVersion`](#configuration-options) / [`dataBaseUrl`](#configuration-options)). For example, to pin a specific data release in a consuming app's `config.yaml`:
+
+```yaml
+'geolookup-plugin':
+  exposeDataLoadService: true
+  dataLoadServiceName: 'dataload'
+  dataVersion: 'data-2026.05'
+```
 
 ### DataLoad Endpoint
 
-> **Important:** The DataLoad endpoint is intended for initial data seeding only. Once all desired states have been loaded, set `exposeDataLoadService` to `false` in your `config.yaml` to disable the endpoint. There is no need to keep it exposed during normal operation.
+> **Important:** The DataLoad endpoint is intended for initial data seeding only. Once the states you need are loaded, set `exposeDataLoadService` to `false` in your `config.yaml` to remove the route. Your geocoding lookups don't need it during normal operation, and disabling it reduces your app's exposed surface area.
 
 **`GET /DataLoad?state={state}`**
 
-Initiates a data load for the given state. The `state` parameter is case-insensitive (it is lowercased internally). The endpoint validates that a matching `.tar.gz` file exists before creating the job.
+Initiates a data load for the given state. The `state` parameter is case-insensitive (it is lowercased internally).
 
 ```sh
 curl "http://localhost:9926/DataLoad?state=Wyoming"
@@ -325,20 +343,15 @@ Response (returns immediately):
 
 The returned `jobId` can be used to check progress via the `DataLoadJob` endpoint.
 
-If the state is invalid or no data file exists, an error is returned synchronously:
-
-```json
-{
-  "error": "No data file found for state: wyoming"
-}
-```
+If the `state` query param is missing, the endpoint returns `{ "error": "state query parameter is required" }` synchronously. Any other failure (download 404, extraction error, load failure) surfaces asynchronously: poll `DataLoadJob/<jobId>` and read `status` (which becomes `"error"`) and `error_message`.
 
 #### What happens in the background
 
-1. **Extracting** — The `.tar.gz` archive is extracted to the `data/` directory
-2. **Loading locations** — All JSON files from the `{state}/Location/` folder are loaded into the `Location` table. The job's `location_count` is updated after each file.
-3. **Loading cells** — All JSON files from the `{state}/Cell/` folder are loaded into the `Cell` table. The job's `cell_count` is updated after each file.
-4. **Cleanup** — The extracted state folder is deleted (even on error)
+1. **Downloading** — The `.tar.gz` for the requested state is fetched from `${dataBaseUrl}/${dataVersion}/${state}.tar.gz` (defaults to GitHub Releases on the geolookup repo) and streamed to a per-job temp directory under `os.tmpdir()`.
+2. **Extracting** — The archive is extracted into the same temp directory using `node-tar` (pure JS — no system `tar` CLI required).
+3. **Loading locations** — All JSON files under `{state}/Location/` in the extracted tree are loaded into the `Location` table. The job's `location_count` is updated after each file.
+4. **Loading cells** — All JSON files under `{state}/Cell/` are loaded into the `Cell` table. The job's `cell_count` is updated after each file.
+5. **Cleanup** — The temp directory is deleted (success or failure).
 
 All database writes within each file are wrapped in a Harper [transaction](https://docs.harperdb.io/docs/reference/transactions) for performance.
 
@@ -399,10 +412,12 @@ curl "http://localhost:9926/DataLoadJob"
 ```mermaid
 stateDiagram-v2
     [*] --> pending : Job created
-    pending --> extracting : Background processing starts
+    pending --> downloading : Background processing starts
+    downloading --> extracting : Archive downloaded
     extracting --> loading_locations : Archive extracted
     loading_locations --> loading_cells : All Location files loaded
     loading_cells --> completed : All Cell files loaded
+    downloading --> error : Download fails
     extracting --> error : Extraction fails
     loading_locations --> error : Loading fails
     loading_cells --> error : Loading fails
@@ -413,6 +428,7 @@ stateDiagram-v2
 | Status | Description |
 |--------|-------------|
 | `pending` | Job created, processing has not started |
+| `downloading` | Fetching the `.tar.gz` archive from the configured base URL |
 | `extracting` | Extracting the `.tar.gz` archive |
 | `loading_locations` | Loading records into the `Location` table |
 | `loading_cells` | Loading records into the `Cell` table |
@@ -421,7 +437,7 @@ stateDiagram-v2
 
 ### Available States and Territories
 
-The following states and territories have pre-packaged data files available for loading:
+The following states and territories have data archives published in the [geolookup GitHub Releases](https://github.com/kylebernhardy/geolookup/releases). Pass any of these names (case-insensitive) as the `state` query parameter:
 
 | States | | | |
 |--------|--------|--------|--------|
@@ -444,6 +460,16 @@ The following states and territories have pre-packaged data files available for 
 | american samoa | cnmi |
 | dc | guam |
 | puerto rico | usvi |
+
+### Publishing a New Data Release
+
+Maintainers cut a new data release after refreshing `data/`:
+
+```bash
+npm run data:publish -- data-YYYY.MM
+```
+
+This uploads every `data/*.tar.gz` to a `data-YYYY.MM` GitHub Release via the `gh` CLI. After publishing, bump `DEFAULT_DATA_VERSION` in `src/dataConfig.ts`, run `npm test` and `npm run build`, then cut a new npm release of the plugin so consumers pick up the new default. Consumers can also pin to a specific data release via the `dataVersion` config option without upgrading the plugin.
 
 ## Development
 
